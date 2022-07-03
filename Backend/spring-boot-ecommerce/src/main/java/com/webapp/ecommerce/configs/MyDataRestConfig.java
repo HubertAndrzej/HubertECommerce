@@ -1,7 +1,9 @@
 package com.webapp.ecommerce.configs;
 
+import com.webapp.ecommerce.entities.Country;
 import com.webapp.ecommerce.entities.Product;
 import com.webapp.ecommerce.entities.ProductCategory;
+import com.webapp.ecommerce.entities.State;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.rest.core.config.RepositoryRestConfiguration;
@@ -31,17 +33,23 @@ public class MyDataRestConfig implements RepositoryRestConfigurer {
 
         HttpMethod[] unsupportedActions = {HttpMethod.POST, HttpMethod.PUT, HttpMethod.DELETE};
 
-        config.getExposureConfiguration()
-                .forDomainType(Product.class)
-                .withItemExposure((metdata, httpMethods) -> httpMethods.disable(unsupportedActions))
-                .withCollectionExposure((metdata, httpMethods) -> httpMethods.disable(unsupportedActions));
+        disableHttpMethods(Product.class, config, unsupportedActions);
 
-        config.getExposureConfiguration()
-                .forDomainType(ProductCategory.class)
-                .withItemExposure((metdata, httpMethods) -> httpMethods.disable(unsupportedActions))
-                .withCollectionExposure((metdata, httpMethods) -> httpMethods.disable(unsupportedActions));
+        disableHttpMethods(ProductCategory.class, config, unsupportedActions);
+
+        disableHttpMethods(Country.class, config, unsupportedActions);
+
+        disableHttpMethods(State.class, config, unsupportedActions);
 
         exposeIds(config);
+    }
+
+    private void disableHttpMethods(Class theClass, RepositoryRestConfiguration config, HttpMethod[] unsupportedActions) {
+
+        config.getExposureConfiguration()
+                .forDomainType(theClass)
+                .withItemExposure((metdata, httpMethods) -> httpMethods.disable(unsupportedActions))
+                .withCollectionExposure((metdata, httpMethods) -> httpMethods.disable(unsupportedActions));
     }
 
     private void exposeIds(RepositoryRestConfiguration config) {
