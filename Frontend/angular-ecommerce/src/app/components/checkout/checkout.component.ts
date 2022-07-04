@@ -1,5 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
+import { Country } from 'src/app/common/country';
+import { State } from 'src/app/common/state';
 import { HubertECommerceFormService } from 'src/app/services/hubert-ecommerce-form.service';
 
 @Component({
@@ -16,6 +18,10 @@ export class CheckoutComponent implements OnInit {
 
   creditCardMonths: number[] = [];
   creditCardYears: number[] = [];
+
+  countries: Country[] = [];
+  shippingAddressStates: State[] = [];
+  billingAddressStates: State[] = [];
 
   constructor(private formBuilder: FormBuilder, private hubertECommerceFormService: HubertECommerceFormService) { }
 
@@ -64,15 +70,23 @@ export class CheckoutComponent implements OnInit {
         this.creditCardYears = data;
       }
     );
+
+    this.hubertECommerceFormService.getCountries().subscribe(
+      data => {
+        this.countries = data;
+      }
+    );
   }
 
   copyShippingAddressToBillingAddress(event) {
 
     if (event.target.checked) {
       this.checkoutFormGroup.controls.billingAddress.setValue(this.checkoutFormGroup.controls.shippingAddress.value);
+      this.billingAddressStates = this.shippingAddressStates;
     }
     else {
       this.checkoutFormGroup.controls.billingAddress.reset();
+      this.billingAddressStates = [];
     }
   }
 
@@ -100,6 +114,24 @@ export class CheckoutComponent implements OnInit {
     this.hubertECommerceFormService.getCreditCardMonths(startMonth).subscribe(
       data => {
         this.creditCardMonths = data;
+      }
+    );
+  }
+
+  getStates(formGroupName: string) {
+
+    const formGroup = this.checkoutFormGroup.get(formGroupName);
+
+    const countryCode = formGroup.value.country.code;
+
+    this.hubertECommerceFormService.getStates(countryCode).subscribe(
+      data => {
+        if (formGroupName === 'shippingAddress') {
+          this.shippingAddressStates = data;
+        }
+        else {
+          this.billingAddressStates = data;
+        }
       }
     );
   }
