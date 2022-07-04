@@ -1,6 +1,6 @@
 package com.webapp.ecommerce.entities;
 
-import lombok.Data;
+import lombok.*;
 
 import javax.persistence.*;
 import java.util.HashSet;
@@ -8,7 +8,11 @@ import java.util.Set;
 
 @Entity
 @Table(name = "customer")
-@Data
+@Setter
+@Getter
+@AllArgsConstructor
+@NoArgsConstructor
+@ToString
 public class Customer {
 
     @Id
@@ -25,7 +29,7 @@ public class Customer {
     @Column(name = "email")
     private String email;
 
-    @OneToMany(cascade = CascadeType.ALL, mappedBy = "order")
+    @OneToMany(cascade = CascadeType.ALL, mappedBy = "customer")
     private Set<Order> orders = new HashSet<>();
 
     public void add(Order order) {
