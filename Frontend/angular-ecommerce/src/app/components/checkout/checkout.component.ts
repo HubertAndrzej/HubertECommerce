@@ -193,6 +193,8 @@ export class CheckoutComponent implements OnInit {
 
     this.checkoutFormGroup.reset();
 
+    localStorage.clear();
+
     this.router.navigateByUrl("/products");
   }
 
