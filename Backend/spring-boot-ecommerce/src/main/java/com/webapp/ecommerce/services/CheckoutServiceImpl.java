@@ -1,17 +1,21 @@
 package com.webapp.ecommerce.services;
 
+import com.stripe.Stripe;
+import com.stripe.exception.StripeException;
+import com.stripe.model.PaymentIntent;
 import com.webapp.ecommerce.daos.CustomerRepository;
+import com.webapp.ecommerce.dtos.PaymentInfo;
 import com.webapp.ecommerce.dtos.Purchase;
 import com.webapp.ecommerce.dtos.PurchaseResponse;
 import com.webapp.ecommerce.entities.Customer;
 import com.webapp.ecommerce.entities.Order;
 import com.webapp.ecommerce.entities.OrderItem;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 
 @Service
@@ -20,8 +24,9 @@ public class CheckoutServiceImpl implements CheckoutService {
     private CustomerRepository customerRepository;
 
     @Autowired
-    public CheckoutServiceImpl(CustomerRepository customerRepository) {
+    public CheckoutServiceImpl(CustomerRepository customerRepository, @Value("${stripe.key.secret}") String secretKey) {
         this.customerRepository = customerRepository;
+        Stripe.apiKey = secretKey;
     }
 
     @Override
@@ -54,6 +59,22 @@ public class CheckoutServiceImpl implements CheckoutService {
         customerRepository.save(customer);
 
         return new PurchaseResponse(orderTrackingNumber);
+    }
+
+    @Override
+    public PaymentIntent createPaymentIntent(PaymentInfo paymentInfo) throws StripeException {
+
+        List<String> paymentMethodTypes = new ArrayList<>();
+        paymentMethodTypes.add("card");
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("amount", paymentInfo.getAmount());
+        params.put("currency", paymentInfo.getCurrency());
+        params.put("payment_method_types", paymentMethodTypes);
+        params.put("description", "HubertECommerce purchase");
+        params.put("receipt_email", paymentInfo.getReceiptEmail());
+
+        return PaymentIntent.create(params);
     }
 
     private String generateOrderTrackingNumber() {

@@ -4,12 +4,14 @@ import { Router } from '@angular/router';
 import { Country } from 'src/app/common/country';
 import { Order } from 'src/app/common/order';
 import { OrderItem } from 'src/app/common/order-item';
+import { PaymentInfo } from 'src/app/common/payment-info';
 import { Purchase } from 'src/app/common/purchase';
 import { State } from 'src/app/common/state';
 import { CartService } from 'src/app/services/cart.service';
 import { CheckoutService } from 'src/app/services/checkout.service';
 import { HubertECommerceFormService } from 'src/app/services/hubert-ecommerce-form.service';
 import { HubertECommerceValidators } from 'src/app/validators/hubert-ecommerce-validators';
+import { environment } from 'src/environments/environment';
 
 @Component({
   selector: 'app-checkout',
@@ -32,9 +34,19 @@ export class CheckoutComponent implements OnInit {
 
   storage: Storage = sessionStorage;
 
+  stripe = Stripe(environment.stripePublishableKey);
+
+  paymentInfo: PaymentInfo = new PaymentInfo();
+  cardElement: any;
+  displayError: any = "";
+
+  isDisabled: boolean = false;
+
   constructor(private formBuilder: FormBuilder, private hubertECommerceFormService: HubertECommerceFormService, private cartService: CartService, private checkoutService: CheckoutService, private router: Router) { }
 
   ngOnInit(): void {
+
+    this.setupStripePaymentForm();
 
     this.reviewCartDetails();
 
@@ -60,35 +72,34 @@ export class CheckoutComponent implements OnInit {
         country: new FormControl('', Validators.required),
         zipCode: new FormControl('', [Validators.required, Validators.minLength(2), HubertECommerceValidators.notOnlyWhitespace])
       }),
-      creditCard: this.formBuilder.group({
-        cardType: new FormControl('', Validators.required),
-        nameOnCard: new FormControl('', [Validators.required, Validators.minLength(2), HubertECommerceValidators.notOnlyWhitespace]),
-        cardNumber: new FormControl('', [Validators.required, Validators.pattern('[0-9]{16}')]),
-        securityCode: new FormControl('', [Validators.required, Validators.pattern('[0-9]{3}')]),
-        expirationMonth: [''],
-        expirationYear: ['']
-      })
+      creditCard: this.formBuilder.group({})
     });
-
-    const startMonth: number = new Date().getMonth() + 1;
-
-    this.hubertECommerceFormService.getCreditCardMonths(startMonth).subscribe(
-      data => {
-        this.creditCardMonths = data;
-      }
-    );
-
-    this.hubertECommerceFormService.getCreditCardYears().subscribe(
-      data => {
-        this.creditCardYears = data;
-      }
-    );
 
     this.hubertECommerceFormService.getCountries().subscribe(
       data => {
         this.countries = data;
       }
     );
+  }
+
+  setupStripePaymentForm() {
+
+    var elements = this.stripe.elements();
+
+    this.cardElement = elements.create('card', { hidePostalCode: true });
+
+    this.cardElement.mount('#card-element');
+
+    this.cardElement.on('change', (event) => {
+      this.displayError = document.getElementById('card-errors');
+
+      if (event.complete) {
+        this.displayError.textContent = "";
+      }
+      else if (event.error) {
+        this.displayError.textContent = event.error.message;
+      }
+    });
   }
 
   reviewCartDetails() {
@@ -172,17 +183,60 @@ export class CheckoutComponent implements OnInit {
     purchase.order = order;
     purchase.orderItems = orderItems;
 
-    this.checkoutService.placeOrder(purchase).subscribe(
-      {
-        next: response => {
-          alert(`Your order has been received.\nOrder tracking number: ${response.orderTrackingNumber}`);
-          this.resetCart();
-        },
-        error: err => {
-          alert(`An error occured: ${err.message}`);
+    this.paymentInfo.amount = Math.round(this.totalPrice * 100);
+    this.paymentInfo.currency = "EUR";
+    this.paymentInfo.receiptEmail = purchase.customer.email;
+
+    if (!this.checkoutFormGroup.invalid && this.displayError.textContent === "") {
+      this.isDisabled = true;
+      this.checkoutService.createPaymentIntent(this.paymentInfo).subscribe(
+        (paymentIntentResponse) => {
+          this.stripe.confirmCardPayment(paymentIntentResponse.client_secret,
+            {
+              payment_method: {
+                card: this.cardElement,
+                billing_details: {
+                  email: purchase.customer.email,
+                  name: `${purchase.customer.firstName} ${purchase.customer.lastName}`,
+                  address: {
+                    line1: purchase.billingAddress.street,
+                    postal_code: purchase.billingAddress.zipCode,
+                    city: purchase.billingAddress.city,
+                    state: purchase.billingAddress.state,
+                    country: this.billingAddressCountry.value.code
+                  }
+                }
+              }
+            },
+            {
+              handleActions: false
+            })
+          .then(function(result) {
+            if (result.error) {
+              alert(`There was an error: ${result.error.message}`);
+              this.isDisabled = false;
+            }
+            else {
+              this.checkoutService.placeOrder(purchase).subscribe({
+                next: response => {
+                  alert(`Your order has been received.\nOrder tracking number: ${response.orderTrackingNumber}`);
+                  this.resetCart();
+                  this.isDisabled = false;
+                },
+                error: err => {
+                  alert(`There was an error: ${err.message}`);
+                  this.isDisabled = false;
+                }
+              })
+            }
+          }.bind(this));
         }
-      }
-    );
+      );
+    }
+    else {
+      this.checkoutFormGroup.markAllAsTouched();
+      return;
+    }
   }
 
   resetCart() {
@@ -190,10 +244,9 @@ export class CheckoutComponent implements OnInit {
     this.cartService.cartItems = [];
     this.cartService.totalPrice.next(0);
     this.cartService.totalQuantity.next(0);
+    this.cartService.persistCartItems();
 
     this.checkoutFormGroup.reset();
-
-    localStorage.clear();
 
     this.router.navigateByUrl("/products");
   }
